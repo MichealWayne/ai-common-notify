@@ -1,0 +1,57 @@
+{
+  "name": "ai-common-notify",
+  "version": "1.0.0-alpha02",
+  "description": "A unified notification service for AI coding tools",
+  "main": "dist/index.js",
+  "bin": {
+    "ai-common-notify": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "docs/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "package": "npm run build && pkg dist/index.js --targets node16-linux-x64,node16-macos-x64,node16-win-x64 --output ai-notify",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "notification",
+    "claude",
+    "cursor",
+    "mcp"
+  ],
+  "author": "MichealWayne",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MichealWayne/ai-common-notify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MichealWayne/ai-common-notify/issues"
+  },
+  "homepage": "https://github.com/MichealWayne/ai-common-notify#readme",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^24.2.1",
+    "@types/node-notifier": "^8.0.5",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.10",
+    "pkg": "^5.8.1",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.2",
+    "commander": "^14.0.0",
+    "node-notifier": "^10.0.1"
+  }
+}

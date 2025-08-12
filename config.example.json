@@ -1,0 +1,38 @@
+{
+  "notifications": {
+    "defaultTimeout": 10,
+    "defaultSound": true,
+    "defaultUrgency": "normal",
+    "defaultIcon": "./assets/icons/app-icon.png"
+  },
+  "platforms": {
+    "windows": {
+      "soundEnabled": true
+    },
+    "macos": {
+      "soundEnabled": true
+    },
+    "linux": {
+      "soundEnabled": true,
+      "urgencyMapping": {
+        "low": "low",
+        "normal": "normal",
+        "critical": "critical"
+      }
+    }
+  },
+  "tools": {
+    "claude-code": {
+      "icon": "./assets/icons/tool-claude.png"
+    },
+    "cursor": {
+      "icon": "./assets/icons/tool-cursor.png"
+    },
+    "windsurf": {
+      "icon": "./assets/icons/tool-windsurf.png"
+    },
+    "kiro": {
+      "icon": "./assets/icons/tool-kiro.png"
+    }
+  }
+}
