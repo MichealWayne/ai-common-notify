@@ -1,31 +1,29 @@
-# Icons
+# 工具图标说明
 
-This directory contains the icons used by the application for notifications.
+本目录包含各种 AI 编程工具的图标文件，用于通知系统中显示工具特定的图标。
 
-## Icon Files
+## 图标文件
 
-- `app-icon.png` - The main application icon (used for notifications)
-- `tool-claude.png` - Icon for Claude Code notifications
-- `tool-cursor.png` - Icon for Cursor notifications
-- `tool-windsurf.png` - Icon for Windsurf notifications
-- `tool-kiro.png` - Icon for Kiro notifications
+- `tool-claude.png` - Claude AI 助手图标（来源：Anthropic 官方图标）
+- `tool-cursor.png` - Cursor 编辑器图标（来源：Cursor 官方仓库）
+- `tool-windsurf.png` - Windsurf 编辑器图标（来源：Windsurf 官方网站）
+- `tool-kiro.png` - Kiro AI 助手图标（自定义设计）
 
-## Supported Formats
+## 图标规格
 
-- PNG format recommended
-- Size: 256x256 pixels for best quality on all platforms
+- 格式：PNG
+- 推荐尺寸：64x64 像素或更高
+- 背景：透明或适合通知系统的背景
 
-## Platform Notes
+## 使用方式
 
-### Windows
-- Supports PNG, ICO formats
-- Recommended size: 256x256 pixels
+这些图标会在配置验证时被检查，并在发送通知时根据工具类型自动选择合适的图标。
 
-### macOS
-- Supports PNG, ICNS formats
-- Recommended size: 256x256 pixels
-- Note: Custom icons in notifications may require special handling due to macOS notification system limitations
+## 添加新图标
 
-### Linux
-- Supports PNG format
-- Recommended size: 256x256 pixels
+如需为新工具添加图标：
+
+1. 将图标文件放置在此目录
+2. 命名格式：`tool-{工具名}.png`
+3. 在 `src/core/ConfigManager.ts` 中添加对应的配置
+4. 重新构建项目：`npm run build`

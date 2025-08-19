@@ -92,6 +92,17 @@ describe('HookHandler', () => {
     expect(eventType).toBeNull();
   });
 
+  it('should determine Notification event type from title and message fields', () => {
+    const data = {
+      title: 'Test Notification',
+      message: 'This is a test message'
+    };
+    
+    const eventType = hookHandler.determineEventType(data);
+    
+    expect(eventType).toBe('Notification');
+  });
+
   // Note: Testing readStdinJson and processHookEvent would require more complex mocking
   // of stdin and the NotificationManager, which is beyond the scope of this example.
 });

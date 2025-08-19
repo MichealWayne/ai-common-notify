@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "Stop": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "node",
+        "path": "/Users/wayne/Desktop/study/my-blog/ai-common-notify/temp-script.js",
+        "enabled": true
+      }]
+    }]
+  }
+}

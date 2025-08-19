@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { ScriptConfig } from './ScriptExecutor';
+import { validateConfig } from '../utils/configValidator';
 
 // Define the configuration interface
 export interface Config {
@@ -31,15 +33,33 @@ export interface Config {
       icon?: string;
     };
   };
+  scripts: {
+    timeout: number;
+    notify: ScriptConfig[];
+  };
+  hooks?: {
+    [key: string]: Array<{
+      matcher: string;
+      hooks: Array<{
+        type: string;
+        path?: string;
+        command?: string;
+        enabled?: boolean;
+      }>;
+    }>;
+  };
+  logging?: {
+    retentionHours?: number;
+  };
 }
 
 // Define the default configuration
 const DEFAULT_CONFIG: Config = {
   notifications: {
-    defaultTimeout: 10,
+    defaultTimeout: 0, // 0表示永久显示
     defaultSound: true,
     defaultUrgency: 'normal',
-    defaultIcon: path.join(__dirname, '../assets/icons/app-icon.png'),
+    defaultIcon: path.join(__dirname, '../assets/icons/i-ai-notify_logo.icns'),
   },
   platforms: {
     windows: {
@@ -61,15 +81,22 @@ const DEFAULT_CONFIG: Config = {
     'claude-code': {
       icon: path.join(__dirname, '../assets/icons/tool-claude.png'),
     },
-    'cursor': {
+    cursor: {
       icon: path.join(__dirname, '../assets/icons/tool-cursor.png'),
     },
-    'windsurf': {
+    windsurf: {
       icon: path.join(__dirname, '../assets/icons/tool-windsurf.png'),
     },
-    'kiro': {
+    kiro: {
       icon: path.join(__dirname, '../assets/icons/tool-kiro.png'),
-    }
+    },
+  },
+  scripts: {
+    timeout: 30000,
+    notify: [],
+  },
+  logging: {
+    retentionHours: 24, // 默认保留24小时的日志
   },
 };
 
@@ -85,6 +112,11 @@ function getGlobalConfigDir(): string {
 
 // Function to get the global config file path
 function getGlobalConfigFile(): string {
+  // 允许通过环境变量覆盖配置文件路径，便于测试
+  const configPath = process.env['AI_COMMON_NOTIFY_CONFIG_PATH'];
+  if (configPath) {
+    return configPath;
+  }
   return path.join(getGlobalConfigDir(), 'config.json');
 }
 
@@ -117,6 +149,16 @@ export function loadConfig(): Config {
     } catch (error) {
       console.error(`Error reading project config file: ${error}`);
     }
+  }
+
+  // 验证配置
+  const validation = validateConfig(config);
+  if (!validation.isValid) {
+    console.warn('Configuration validation failed:', validation.errors);
+    // 不抛出错误，而是使用默认配置并记录警告
+  }
+  if (validation.warnings.length > 0) {
+    console.warn('Configuration warnings:', validation.warnings);
   }
 
   return config;
@@ -168,15 +210,87 @@ function mergeConfigs(base: Config, override: any): Config {
     };
   }
 
+  // Merge scripts
+  if (override.scripts) {
+    merged.scripts = {
+      ...merged.scripts,
+      ...override.scripts,
+      notify: override.scripts.notify || merged.scripts.notify,
+    };
+
+    // 为了向后兼容，如果配置中仍有pre_notify或post_notify，则合并到notify中
+    if (override.scripts.pre_notify || override.scripts.post_notify) {
+      const preScripts = override.scripts.pre_notify || [];
+      const postScripts = override.scripts.post_notify || [];
+      merged.scripts.notify = [...preScripts, ...postScripts, ...merged.scripts.notify];
+    }
+  }
+
+  // Merge hooks
+  if (override.hooks) {
+    // 如果基础配置中没有hooks，则初始化为空对象
+    if (!merged.hooks) {
+      merged.hooks = {};
+    }
+    
+    // 合并hooks配置
+    for (const [eventType, hookConfigs] of Object.entries(override.hooks)) {
+      if (Array.isArray(hookConfigs)) {
+        // 如果事件类型已存在，则合并配置，否则直接添加
+        if (merged.hooks[eventType]) {
+          merged.hooks[eventType] = [...merged.hooks[eventType], ...hookConfigs];
+        } else {
+          merged.hooks[eventType] = hookConfigs;
+        }
+      }
+    }
+  }
+
   return merged;
 }
 
 // Export a function to get the config
 let cachedConfig: Config | null = null;
+let lastConfigCheck: number = 0;
+const CONFIG_CACHE_TTL = 5000; // 5秒缓存时间
 
 export function getConfig(): Config {
-  if (!cachedConfig) {
-    cachedConfig = loadConfig();
+  const now = Date.now();
+
+  // 如果缓存存在且未过期，直接返回
+  if (cachedConfig && now - lastConfigCheck < CONFIG_CACHE_TTL) {
+    return cachedConfig;
   }
+
+  // 重新加载配置
+  cachedConfig = loadConfig();
+  lastConfigCheck = now;
   return cachedConfig;
+}
+
+/**
+ * 清除配置缓存，强制重新加载
+ */
+export function clearConfigCache(): void {
+  cachedConfig = null;
+  lastConfigCheck = 0;
+}
+
+/**
+ * 重新加载配置
+ */
+export function reloadConfig(): Config {
+  clearConfigCache();
+  return getConfig();
+}
+
+// Helper functions to get script configurations
+export function getNotifyScripts(): ScriptConfig[] {
+  const config = getConfig();
+  return config.scripts?.notify || [];
+}
+
+export function getScriptTimeout(): number {
+  const config = getConfig();
+  return config.scripts?.timeout || 30000;
 }

@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import { isWindows } from './commonUtils';
 
 export interface ProjectInfo {
   projectName: string;
@@ -120,7 +121,7 @@ function getFallbackProjectInfo(): ProjectInfo {
           !genericNames.includes(parentName) &&
           !userNames.includes(parentName) &&
           parentName !== '' &&
-          parentName !== (process.platform === 'win32' ? '' : '/')
+          parentName !== (isWindows() ? '' : '/')
         ) {
           const parentPath = parentDirs.slice(0, i + 1).join(path.sep);
           return {

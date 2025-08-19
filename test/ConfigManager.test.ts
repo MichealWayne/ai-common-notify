@@ -29,7 +29,7 @@ describe('ConfigManager', () => {
 
   it('should return default config when no config files exist', () => {
     const config = loadConfig();
-    expect(config.notifications.defaultTimeout).toBe(10);
+    expect(config.notifications.defaultTimeout).toBe(0);
     expect(config.notifications.defaultSound).toBe(true);
     expect(config.notifications.defaultUrgency).toBe('normal');
   });
@@ -65,7 +65,7 @@ describe('ConfigManager', () => {
     fs.writeFileSync(projectConfigFile, JSON.stringify(projectConfig, null, 2));
 
     const config = loadConfig();
-    expect(config.notifications.defaultTimeout).toBe(10); // Should still be default
+    expect(config.notifications.defaultTimeout).toBe(0); // Should still be default
     expect(config.notifications.defaultSound).toBe(true); // Should still be default
     expect(config.notifications.defaultUrgency).toBe('critical');
   });

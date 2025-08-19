@@ -82,3 +82,11 @@ ai-notify-win.exe
 
 # output
 dist
+*.zip
+
+test
+
+# ai tools
+.kiro
+.qwen
+.cursor

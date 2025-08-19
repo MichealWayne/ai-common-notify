@@ -1,6 +1,7 @@
 import { NotificationManager } from '../core/NotificationManager';
 import { extractProjectInfo } from '../utils/ProjectInfoExtractor';
 import { getConfig } from '../core/ConfigManager';
+import { logger } from '../utils/logger';
 
 interface HookData {
   event_type?: string;
@@ -8,6 +9,7 @@ interface HookData {
   tool_input?: any;
   transcript_path?: string;
   session_id?: string;
+  title?: string;
   message?: string;
   notification_type?: string;
   tool_response?: any;
@@ -51,14 +53,14 @@ export class HookHandler {
           const parsedData = JSON.parse(inputData);
           resolve(parsedData);
         } catch (error) {
-          console.error('Error parsing JSON from stdin:', error);
+          logger.error('HookHandler', 'Error parsing JSON from stdin', { error }, 'readStdinJson', __filename);
           resolve(null);
         }
       });
       
       // Handle errors
       process.stdin.on('error', (error) => {
-        console.error('Error reading from stdin:', error);
+        logger.error('HookHandler', 'Error reading from stdin', { error }, 'readStdinJson', __filename);
         resolve(null);
       });
     });
@@ -90,6 +92,11 @@ export class HookHandler {
       return 'Notification';
     }
     
+    // Check for generic notification with title and message
+    if (data.title && data.message) {
+      return 'Notification';
+    }
+    
     // Default to Stop if we have session info but no tool info
     if (data.session_id && !data.tool_name) {
       return 'Stop';
@@ -103,9 +110,10 @@ export class HookHandler {
    * 
    * @param eventType - The type of event
    * @param data - The hook data
+   * @param timeout - The notification timeout in seconds (0 for permanent)
    * @returns Promise that resolves to true if notification was sent successfully
    */
-  async processHookEvent(eventType: string, data: HookData): Promise<boolean> {
+  async processHookEvent(eventType: string, data: HookData, timeout: number = 0): Promise<boolean> {
     // Define notification templates for different hook events
     const eventTemplates: Record<string, any> = {
       PreToolUse: {
@@ -203,14 +211,164 @@ export class HookHandler {
       message = `${message}\nProject: ${projectInfo.projectName} (${projectInfo.projectPath})`;
     }
     
-    // Send the notification
+    // Execute project-specific hooks before sending notification
     const config = getConfig();
+    await this.executeProjectHooks(eventType, data, projectInfo);
+    
+    // Send the notification
     return this.notificationManager.sendNotification({
       title,
       message,
       urgency,
+      timeout, // 添加timeout参数
       sound: (urgency === 'normal' || urgency === 'critical') ? config.notifications.defaultSound : false
     });
+  }
+
+  /**
+   * Execute project-specific hooks based on event type and data
+   * 
+   * @param eventType - The type of event
+   * @param data - The hook data
+   * @param projectInfo - Project information
+   * @returns Promise that resolves when all hooks have been executed
+   */
+  private async executeProjectHooks(eventType: string, data: HookData, projectInfo: { projectName: string; projectPath: string } | null): Promise<void> {
+    const config = getConfig();
+    
+    // Check if hooks are configured
+    if (!config.hooks || !config.hooks[eventType]) {
+      return;
+    }
+    
+    // Get hooks for this event type
+    const hookConfigs = config.hooks[eventType];
+    
+    // Execute each hook
+    for (const hookConfig of hookConfigs) {
+      // Check if any hook matches the data
+      const matches = hookConfig.matcher === '.*' || 
+        (data.message && new RegExp(hookConfig.matcher).test(data.message)) ||
+        (data.tool_name && new RegExp(hookConfig.matcher).test(data.tool_name));
+        
+      if (matches) {
+        // Execute each hook in the configuration
+        for (const hook of hookConfig.hooks) {
+          // Check if hook is enabled
+          if (hook.enabled === false) {
+            continue;
+          }
+          
+          // Execute the hook based on its type
+          if (hook.type === 'node' && hook.path) {
+            // Execute node script
+            await this.executeNodeScript(hook.path, eventType, data, projectInfo);
+          } else if (hook.type === 'command' && hook.command) {
+            // Execute command
+            await this.executeCommand(hook.command, eventType, data, projectInfo);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Execute a node script with environment variables
+   * 
+   * @param scriptPath - Path to the node script
+   * @param eventType - The event type
+   * @param data - The hook data
+   * @param projectInfo - Project information
+   * @returns Promise that resolves when the script has been executed
+   */
+  private async executeNodeScript(scriptPath: string, eventType: string, data: HookData, projectInfo: { projectName: string; projectPath: string } | null): Promise<void> {
+    try {
+      const { ScriptExecutor } = await import('../core/ScriptExecutor');
+      
+      // Create script executor
+      const config = getConfig();
+      const scriptExecutor = new ScriptExecutor(config.scripts.timeout);
+      
+      // Prepare environment variables
+      const env = {
+        NOTIFY_EVENT_TYPE: eventType,
+        NOTIFY_TITLE: data.title || '',
+        NOTIFY_MESSAGE: data.message || '',
+        NOTIFY_TOOL_NAME: data.tool_name || '',
+        NOTIFY_PROJECT_NAME: projectInfo?.projectName || '',
+        NOTIFY_PROJECT_PATH: projectInfo?.projectPath || '',
+        NOTIFY_TRANSCRIPT_PATH: data.transcript_path || '',
+        NOTIFY_SESSION_ID: data.session_id || '',
+        NOTIFY_TIMESTAMP: new Date().toISOString(),
+        // 添加缺少的必需字段
+        NOTIFY_URGENCY: 'normal',
+        NOTIFY_TIMEOUT: '0',
+        NOTIFY_SOUND: 'true'
+      };
+      
+      // Execute the script
+      const scriptConfig = {
+        type: 'node' as const,
+        path: scriptPath,
+        enabled: true
+      };
+      
+      await scriptExecutor.execute(scriptConfig, env);
+    } catch (error) {
+      logger.error('HookHandler', `Error executing node script: ${scriptPath}`, { error }, 'executeNodeScript', __filename);
+    }
+  }
+
+  /**
+   * Execute a command with environment variables
+   * 
+   * @param command - The command to execute
+   * @param eventType - The event type
+   * @param data - The hook data
+   * @param projectInfo - Project information
+   * @returns Promise that resolves when the command has been executed
+   */
+  private async executeCommand(command: string, eventType: string, data: HookData, projectInfo: { projectName: string; projectPath: string } | null): Promise<void> {
+    try {
+      const { spawn } = await import('child_process');
+      
+      // Prepare environment variables
+      const env: Record<string, string> = {
+        ...process.env as Record<string, string>,
+        NOTIFY_EVENT_TYPE: eventType,
+        NOTIFY_TITLE: data.title || '',
+        NOTIFY_MESSAGE: data.message || '',
+        NOTIFY_TOOL_NAME: data.tool_name || '',
+        NOTIFY_PROJECT_NAME: projectInfo?.projectName || '',
+        NOTIFY_PROJECT_PATH: projectInfo?.projectPath || '',
+        NOTIFY_TRANSCRIPT_PATH: data.transcript_path || '',
+        NOTIFY_SESSION_ID: data.session_id || '',
+        NOTIFY_TIMESTAMP: new Date().toISOString(),
+      };
+      
+      // Execute the command
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(command, [], { 
+          shell: true, 
+          env,
+          stdio: 'ignore'
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`Command exited with code ${code}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          reject(error);
+        });
+      });
+    } catch (error) {
+      logger.error('HookHandler', `Error executing command: ${command}`, { error }, 'executeCommand', __filename);
+    }
   }
 
   /**

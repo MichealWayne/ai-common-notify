@@ -34,6 +34,7 @@ describe('MCPServer', () => {
       },
       {
         capabilities: {
+          resources: {},
           tools: {},
         },
       }
